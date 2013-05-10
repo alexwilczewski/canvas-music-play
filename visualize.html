@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+
+<title>Visualize Me</title>
+
+<script type="text/javascript">
+var context, analyser;
+
+window.addEventListener("load", function() {
+  var audio = document.createElement("audio");
+  audio.id = "myAudio";
+  audio.src = "/audio3.mp3";
+  document.getElementsByTagName("body")[0].insertBefore(audio);
+
+  // create the analyser
+  context = new webkitAudioContext();
+  analyser = context.createAnalyser();
+
+  var source;
+  
+
+setTimeout(function() {
+  source = context.createMediaElementSource(audio);
+  source.connect(analyser);
+  analyser.connect(context.destination);
+
+  audio.play();
+  rafCallback();
+}, 10);
+
+setTimeout(function() {
+  audio.pause();
+}, 5000);
+
+setTimeout(function() {
+  audio.play();
+}, 7000);
+
+
+  var MAX_BAR = 100;
+
+  var canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext('2d');
+
+
+  var body = document.getElementsByTagName("body")[0];
+
+  function rafCallback(time) {
+    window.requestAnimationFrame(rafCallback);
+
+    ctx.clearRect(0, 0, 500, 500);
+
+    var freqByteData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freqByteData);
+
+    var full_step = Math.floor(freqByteData.length / MAX_BAR);
+
+    for (var j = 0; j < MAX_BAR; j++) {
+      var size = 0;
+      for(var i = 0; i<full_step; i++) {
+        size += freqByteData[j*full_step+i];
+      }
+
+      
+      var mag = size/full_step;
+      drawBar(ctx, 0, j*2, mag, 1);
+      
+    }
+  }
+
+});
+
+function drawBar(ctx, x, y, width, height) {
+  ctx.fillStyle = "#990000";
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x+width, y);
+  ctx.lineTo(x+width, y+height);
+  ctx.lineTo(x, y+height);
+  ctx.lineTo(x, y);
+  ctx.fill();
+}
+
+</script>
+</head>
+
+<body>
+  <canvas id="canvas" width="320" height="500"></canvas>
+</body>
+</html>
