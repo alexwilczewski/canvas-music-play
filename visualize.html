@@ -5,40 +5,65 @@
 <title>Visualize Me</title>
 
 <script type="text/javascript">
-var context, analyser;
+function AudioManager() {
+  this.context = new webkitAudioContext();
+  this.analyser = this.context.createAnalyser();
+
+  this.audioObject;
+  this.source;
+  this.hookedUp = true;
+}
+AudioManager.prototype.construct = function() {
+  this.audioObject = document.createElement("audio");
+  this.audioObject.id = "myAudio";
+  // audio.src = "/audio3.mp3";
+  document.getElementsByTagName("body")[0].insertBefore(this.audioObject);
+};
+AudioManager.prototype.destruct = function() {
+
+};
+AudioManager.prototype.changeSrc = function(src) {
+  this.audioObject.src = src;
+  this.hookedUp = true;
+};
+AudioManager.prototype.hookup = function() {
+  this.hookedUp = false;
+
+  this.source = this.context.createMediaElementSource(this.audioObject);
+  this.source.connect(this.analyser);
+  this.analyser.connect(this.context.destination);
+};
+AudioManager.prototype.teardown = function() {
+  // Disconnect those things
+};
+AudioManager.prototype.play = function() {
+  if(this.hookedUp) {
+    this.hookup();
+  }
+
+  this.audioObject.play();
+};
+AudioManager.prototype.pause = function() {
+  this.audioObject.pause();
+};
+AudioManager.prototype.stop = function() {
+  this.audioObject.pause();
+  this.audioObject.currentTime = 0;
+};
+AudioManager.prototype.getFreqData = function() {
+  var freqByteData = new Uint8Array(this.analyser.frequencyBinCount);
+  this.analyser.getByteFrequencyData(freqByteData);
+  return freqByteData;
+};
+
+var MAX_BAR = 500;
 
 window.addEventListener("load", function() {
-  var audio = document.createElement("audio");
-  audio.id = "myAudio";
-  audio.src = "/audio3.mp3";
-  document.getElementsByTagName("body")[0].insertBefore(audio);
+  var audioManager = new AudioManager();
+  audioManager.construct();
+  audioManager.changeSrc("/audio3.mp3");
 
-  // create the analyser
-  context = new webkitAudioContext();
-  analyser = context.createAnalyser();
-
-  var source;
   
-
-setTimeout(function() {
-  source = context.createMediaElementSource(audio);
-  source.connect(analyser);
-  analyser.connect(context.destination);
-
-  audio.play();
-  rafCallback();
-}, 10);
-
-setTimeout(function() {
-  audio.pause();
-}, 5000);
-
-setTimeout(function() {
-  audio.play();
-}, 7000);
-
-
-  var MAX_BAR = 100;
 
   var canvas = document.getElementById("canvas");
   var ctx = canvas.getContext('2d');
@@ -51,8 +76,7 @@ setTimeout(function() {
 
     ctx.clearRect(0, 0, 500, 500);
 
-    var freqByteData = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(freqByteData);
+    var freqByteData = audioManager.getFreqData();
 
     var full_step = Math.floor(freqByteData.length / MAX_BAR);
 
@@ -69,7 +93,16 @@ setTimeout(function() {
     }
   }
 
+  audioManager.audioObject.addEventListener("loadstart", function() {
+    audioManager.play();
+    rafCallback();
+  });
 });
+
+
+
+
+
 
 function drawBar(ctx, x, y, width, height) {
   ctx.fillStyle = "#990000";
