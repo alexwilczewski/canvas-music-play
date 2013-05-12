@@ -13,10 +13,9 @@ function AudioManager() {
   this.source;
   this.hookedUp = true;
 }
-AudioManager.prototype.construct = function() {
+AudioManager.prototype.construct = function(id) {
   this.audioObject = document.createElement("audio");
-  this.audioObject.id = "myAudio";
-  // audio.src = "/audio3.mp3";
+  this.audioObject.id = id;
   document.getElementsByTagName("body")[0].insertBefore(this.audioObject);
 };
 AudioManager.prototype.destruct = function() {
@@ -55,56 +54,88 @@ AudioManager.prototype.getFreqData = function() {
   this.analyser.getByteFrequencyData(freqByteData);
   return freqByteData;
 };
+AudioManager.prototype.getMagnitudes = function(steps) {
+  var freqByteData = this.getFreqData();
 
-var MAX_BAR = 500;
-
-window.addEventListener("load", function() {
-  var audioManager = new AudioManager();
-  audioManager.construct();
-  audioManager.changeSrc("/audio3.mp3");
-
-  
-
-  var canvas = document.getElementById("canvas");
-  var ctx = canvas.getContext('2d');
-
-
-  var body = document.getElementsByTagName("body")[0];
-
-  function rafCallback(time) {
-    window.requestAnimationFrame(rafCallback);
-
-    ctx.clearRect(0, 0, 500, 500);
-
-    var freqByteData = audioManager.getFreqData();
-
-    var full_step = Math.floor(freqByteData.length / MAX_BAR);
-
-    for (var j = 0; j < MAX_BAR; j++) {
-      var size = 0;
-      for(var i = 0; i<full_step; i++) {
-        size += freqByteData[j*full_step+i];
-      }
-
-      
-      var mag = size/full_step;
-      drawBar(ctx, 0, j*2, mag, 1);
-      
+  var step_size = Math.floor(freqByteData.length / steps);
+  var mags = [], count = 0;
+  for (var j = 0; j < steps; j++) {
+    var total_mag = 0;
+    for(var i = 0; i < step_size; i++) {
+      total_mag += freqByteData[count++];
     }
+
+    var avg_mag = total_mag/step_size;
+    mags.push(avg_mag);
   }
 
-  audioManager.audioObject.addEventListener("loadstart", function() {
-    audioManager.play();
-    rafCallback();
-  });
-});
+  return mags;
+};
 
+function Composer() {
+  this.aaLinks = {};
 
+  this.audioCount = 0;
+  this.animationCount = 0;
 
+  this.uniqId = 0;
+}
+Composer.prototype.stop = function() {
+  for(var x in this.aaLinks) {
+    this.aaLinks[x].audioManager.stop();
+  }
+};
+Composer.prototype.start = function() {
 
+};
+Composer.prototype.animate = function(time) {
+  var _this = this;
+  window.requestAnimationFrame(function(time) { _this.animate(time); });
 
+  for(var x in this.aaLinks) {
+    this.aaLinks[x].clear();
+  }
 
-function drawBar(ctx, x, y, width, height) {
+  for(var x in this.aaLinks) {
+    this.aaLinks[x].animate();
+  }
+};
+Composer.prototype.attach = function(aaLink) {
+  var id = this.uniqId++;
+  this.aaLinks[id] = aaLink;
+
+  this.animationCount++;
+
+  return id;
+};
+
+function AudioAnimationLink(audioManager, animation) {
+  this.audioManager = audioManager;
+  this.animation = animation;
+}
+AudioAnimationLink.prototype.clear = function() {
+  this.animation.clear();
+};
+AudioAnimationLink.prototype.animate = function() {
+  this.animation.animate(this.audioManager);
+};
+
+function BarAnimation(canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext('2d');
+  this.barCount = 100;
+}
+BarAnimation.prototype.clear = function() {
+  this.ctx.clearRect(0, 0, 500, 500);
+};
+BarAnimation.prototype.animate = function(audioManager) {
+  var mags = audioManager.getMagnitudes(this.barCount);
+
+  for(var j = 0; j < mags.length; j++) {
+    this.draw(this.ctx, 0, j*2, mags[j], 1);
+  }
+};
+BarAnimation.prototype.draw = function(ctx, x, y, width, height) {
   ctx.fillStyle = "#990000";
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -113,12 +144,170 @@ function drawBar(ctx, x, y, width, height) {
   ctx.lineTo(x, y+height);
   ctx.lineTo(x, y);
   ctx.fill();
+};
+
+function LineAnimation(canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext('2d');
+  this.pointCount = 100;
 }
+LineAnimation.prototype.clear = function() {
+  this.ctx.clearRect(0, 0, 500, 500);
+};
+LineAnimation.prototype.animate = function(audioManager) {
+  var mags = audioManager.getMagnitudes(this.pointCount);
+
+  for(var j = 0; j < mags.length-1; j++) {
+    this.draw(this.ctx, mags[j], j*2, mags[j+1], (j+1)*2);
+  }
+};
+LineAnimation.prototype.draw = function(ctx, x1, y1, x2, y2) {
+  ctx.strokeStyle = "#990000";
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+};
+
+function CircleAnimation(canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext('2d');
+  this.circles = 100;
+}
+CircleAnimation.prototype.clear = function() {
+  this.ctx.clearRect(0, 0, 500, 500);
+};
+CircleAnimation.prototype.animate = function(audioManager) {
+  var mags = audioManager.getMagnitudes(this.circles);
+
+  var halflength = Math.floor(mags.length/2);
+
+  for(var j = 0; j < halflength; j++) {
+    this.draw(this.ctx, 100, 100, mags[j]);
+  }
+
+  for(var j = halflength; j < mags.length; j++) {
+    this.draw(this.ctx, 200, 200, mags[j]);
+  }
+};
+CircleAnimation.prototype.draw = function(ctx, x, y, r) {
+  ctx.strokeStyle = "#990000";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2, false);
+  ctx.stroke();
+};
+
+function TowerAnimation(canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext('2d');
+  this.baseY = canvas.height;
+  this.towers = 50;
+  this.colors = [
+    "#8A2BE2", "#0000FF",  "#98F5FF", "#006400", "#FF3030", "#8A2BE2", "#0000FF",  "#98F5FF", "#006400", "#FF3030", "#0000FF",  "#98F5FF", "#006400", "#FF3030", "#8A2BE2", "#0000FF",  "#98F5FF", "#006400", "#FF3030"
+  ];
+  this.colorHeights = [];
+
+  var colorHeightDiff = this.baseY/this.colors.length;
+  for(var i=this.colors.length-1; i>=0; i--) {
+    this.colorHeights.push(colorHeightDiff*i);
+  }
+
+  this.towerXs = [];
+  for(var i=0; i< this.towers; i++) {
+    this.towerXs.push(Math.floor(canvas.width/this.towers)*i);
+  }
+}
+TowerAnimation.prototype.clear = function() {
+  this.ctx.clearRect(0, 0, 500, 500);
+};
+TowerAnimation.prototype.animate = function(audioManager) {
+  var mags = audioManager.getMagnitudes(this.towers);
+
+  var width = 5;
+
+  for(var i = 0; i<mags.length; i++) {
+    this.draw(this.ctx, this.towerXs[i], mags[i], width);
+  }
+};
+TowerAnimation.prototype.draw = function(ctx, x, height, width) {
+  var lineHeight = 10;
+  var lineCount = Math.floor(height / lineHeight);
+
+  var colorIndex, color;
+
+  var currentLineHeight = this.baseY;
+
+  for(var i = 0; i < lineCount; i++) {
+    var segmentLowerY = currentLineHeight;
+    var segmentUpperY = currentLineHeight-lineHeight;
+
+    for(var j=0; j < this.colorHeights.length; j++) {
+      if(this.colorHeights[j] <= segmentUpperY) {
+        colorIndex = j;
+        break;
+      }
+    }
+
+    color = this.colors[colorIndex];
+
+    ctx.strokeStyle = "#990000";
+    ctx.fillStyle = color;
+
+    ctx.beginPath();
+    ctx.moveTo(x, segmentLowerY);
+    ctx.lineTo(x, segmentUpperY);
+    ctx.lineTo(x+width, segmentUpperY);
+    ctx.lineTo(x+width, segmentLowerY);
+    ctx.lineTo(x, segmentLowerY);
+    ctx.stroke();
+    ctx.fill();
+
+    currentLineHeight -= lineHeight;
+  }
+};
+
+
+
+var composer = new Composer();
+
+window.addEventListener("load", function() {
+  var audioManager = new AudioManager();
+  audioManager.construct("audio");
+  audioManager.changeSrc("audio3.mp3");
+  var canvas = document.getElementById("canvas");
+
+  var audioManager2 = new AudioManager();
+  audioManager2.construct("audio");
+  audioManager2.changeSrc("audio.mp3");
+  var canvas2 = document.getElementById("canvas2");
+
+
+  
+  composer.attach(new AudioAnimationLink(audioManager, new BarAnimation(canvas)));
+  composer.attach(new AudioAnimationLink(audioManager, new TowerAnimation(canvas2)));
+  // composer.attach(new AudioAnimationLink(audioManager2, new BarAnimation(canvas2)));
+  // composer.attach(new AudioAnimationLink(audioManager2, new LineAnimation(canvas)));
+
+  audioManager.audioObject.addEventListener("loadstart", function() {
+    audioManager.play();
+    composer.animate();
+  });
+  audioManager2.audioObject.addEventListener("loadstart", function() {
+    // audioManager2.play();
+  });
+});
+
+function kill() {
+  composer.stop();
+}
+
+
 
 </script>
 </head>
 
 <body>
   <canvas id="canvas" width="320" height="500"></canvas>
+  <canvas id="canvas2" width="320" height="500"></canvas>
 </body>
 </html>
